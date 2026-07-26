@@ -1,0 +1,262 @@
+### =====================================================================
+### Library API — request collection
+###
+### Works in:
+###   * IntelliJ IDEA / any JetBrains IDE (built-in HTTP Client) — just
+###     click the green ▶ arrow in the gutter next to each request.
+###   * VS Code with the "REST Client" extension (humao.rest-client) —
+###     click "Send Request" above each request.
+###
+### Requests run top to bottom; later ones reuse ids captured from the
+### responses of earlier ones, so run them in order the first time.
+### =====================================================================
+
+@host = http://localhost:8080
+@contentType = application/json
+
+### ---------------------------------------------------------------------
+### 1. Register a borrower
+### Captures the new id into {{borrowerId}} for later requests.
+### ---------------------------------------------------------------------
+# @name registerBorrower
+POST {{host}}/api/v1/borrowers
+Content-Type: {{contentType}}
+
+{
+  "name": "Ada Lovelace",
+  "email": "ada@example.com"
+}
+
+> {%
+    client.global.set("borrowerId", response.body.id);
+    client.test("borrower created", () => {
+        client.assert(response.status === 201, "expected 201, got " + response.status);
+    });
+%}
+
+### ---------------------------------------------------------------------
+### 2. Register a second borrower (for the "someone else's book" tests)
+### ---------------------------------------------------------------------
+# @name registerBorrower2
+POST {{host}}/api/v1/borrowers
+Content-Type: {{contentType}}
+
+{
+  "name": "Grace Hopper",
+  "email": "grace@example.com"
+}
+
+> {% client.global.set("borrowerId2", response.body.id); %}
+
+### ---------------------------------------------------------------------
+### 3. Register a book copy — captures {{bookId1}}
+### ---------------------------------------------------------------------
+# @name registerBook1
+POST {{host}}/api/v1/books
+Content-Type: {{contentType}}
+
+{
+  "isbn": "9780132350884",
+  "title": "Clean Code",
+  "author": "Robert C. Martin"
+}
+
+> {%
+    client.global.set("bookId1", response.body.id);
+    client.test("book created", () => {
+        client.assert(response.status === 201, "expected 201, got " + response.status);
+        client.assert(response.body.available === true, "new copy should be available");
+    });
+%}
+
+### ---------------------------------------------------------------------
+### 4. Register a SECOND copy of the same ISBN — captures {{bookId2}}
+### Same ISBN, but the response id must differ from bookId1.
+### ---------------------------------------------------------------------
+# @name registerBook2
+POST {{host}}/api/v1/books
+Content-Type: {{contentType}}
+
+{
+  "isbn": "9780132350884",
+  "title": "Clean Code",
+  "author": "Robert C. Martin"
+}
+
+> {%
+    client.global.set("bookId2", response.body.id);
+    client.test("second copy gets a distinct id", () => {
+        client.assert(response.body.id !== parseInt(client.global.get("bookId1")),
+            "two copies of one ISBN must have different ids");
+    });
+%}
+
+### ---------------------------------------------------------------------
+### 5. List the whole catalogue
+### ---------------------------------------------------------------------
+GET {{host}}/api/v1/books
+
+### ---------------------------------------------------------------------
+### 6. List with search + pagination
+### ---------------------------------------------------------------------
+GET {{host}}/api/v1/books?search=clean&page=0&size=10
+
+### ---------------------------------------------------------------------
+### 7. Fetch a single copy
+### ---------------------------------------------------------------------
+GET {{host}}/api/v1/books/{{bookId1}}
+
+### ---------------------------------------------------------------------
+### 8. Borrow copy 1 on behalf of Ada — expect 200
+### ---------------------------------------------------------------------
+# @name borrow
+POST {{host}}/api/v1/books/{{bookId1}}/borrow
+Content-Type: {{contentType}}
+
+{
+  "borrowerId": {{borrowerId}}
+}
+
+> {%
+    client.test("borrow succeeds", () => {
+        client.assert(response.status === 200, "expected 200, got " + response.status);
+        client.assert(response.body.returnedAt === null, "loan should be open");
+    });
+%}
+
+### ---------------------------------------------------------------------
+### 9. Grace tries to borrow the SAME copy — expect 409 BOOK_ALREADY_BORROWED
+### ---------------------------------------------------------------------
+POST {{host}}/api/v1/books/{{bookId1}}/borrow
+Content-Type: {{contentType}}
+
+{
+  "borrowerId": {{borrowerId2}}
+}
+
+> {%
+    client.test("double-borrow is rejected", () => {
+        client.assert(response.status === 409, "expected 409, got " + response.status);
+        client.assert(response.body.errorCode === "BOOK_ALREADY_BORROWED",
+            "wrong errorCode: " + response.body.errorCode);
+    });
+%}
+
+### ---------------------------------------------------------------------
+### 10. But the OTHER copy of the same ISBN is still borrowable — expect 200
+### ---------------------------------------------------------------------
+POST {{host}}/api/v1/books/{{bookId2}}/borrow
+Content-Type: {{contentType}}
+
+{
+  "borrowerId": {{borrowerId2}}
+}
+
+> {% client.test("other copy still available", () =>
+      client.assert(response.status === 200, "expected 200, got " + response.status)); %}
+
+### ---------------------------------------------------------------------
+### 11. List Ada's active loans
+### ---------------------------------------------------------------------
+GET {{host}}/api/v1/borrowers/{{borrowerId}}/loans
+
+### ---------------------------------------------------------------------
+### 12. Grace tries to return Ada's book — expect 403 BORROWER_MISMATCH
+### ---------------------------------------------------------------------
+POST {{host}}/api/v1/books/{{bookId1}}/return
+Content-Type: {{contentType}}
+
+{
+  "borrowerId": {{borrowerId2}}
+}
+
+> {%
+    client.test("only the holder may return", () => {
+        client.assert(response.status === 403, "expected 403, got " + response.status);
+        client.assert(response.body.errorCode === "BORROWER_MISMATCH");
+    });
+%}
+
+### ---------------------------------------------------------------------
+### 13. Ada returns her book — expect 200
+### ---------------------------------------------------------------------
+POST {{host}}/api/v1/books/{{bookId1}}/return
+Content-Type: {{contentType}}
+
+{
+  "borrowerId": {{borrowerId}}
+}
+
+> {%
+    client.test("return succeeds", () => {
+        client.assert(response.status === 200, "expected 200, got " + response.status);
+        client.assert(response.body.returnedAt !== null, "returnedAt should be stamped");
+    });
+%}
+
+### ---------------------------------------------------------------------
+### 14. Return it again — expect 409 BOOK_NOT_BORROWED
+### ---------------------------------------------------------------------
+POST {{host}}/api/v1/books/{{bookId1}}/return
+Content-Type: {{contentType}}
+
+{
+  "borrowerId": {{borrowerId}}
+}
+
+> {% client.test("returning a shelved copy fails", () =>
+      client.assert(response.status === 409, "expected 409, got " + response.status)); %}
+
+
+### =====================================================================
+### Validation / error cases
+### =====================================================================
+
+### 15. Duplicate email — expect 409 EMAIL_ALREADY_REGISTERED
+POST {{host}}/api/v1/borrowers
+Content-Type: {{contentType}}
+
+{
+  "name": "Ada again",
+  "email": "ADA@example.com"
+}
+
+### 16. Invalid email + blank name — expect 400 with a per-field breakdown
+POST {{host}}/api/v1/borrowers
+Content-Type: {{contentType}}
+
+{
+  "name": "",
+  "email": "not-an-email"
+}
+
+### 17. Bad ISBN check digit — expect 400 (9780132350885 fails the checksum)
+POST {{host}}/api/v1/books
+Content-Type: {{contentType}}
+
+{
+  "isbn": "9780132350885",
+  "title": "Clean Code",
+  "author": "Robert C. Martin"
+}
+
+### 18. Same ISBN, conflicting title — expect 409 ISBN_MISMATCH
+POST {{host}}/api/v1/books
+Content-Type: {{contentType}}
+
+{
+  "isbn": "9780132350884",
+  "title": "The Pragmatic Programmer",
+  "author": "Andrew Hunt"
+}
+
+### 19. Borrow a non-existent book — expect 404 RESOURCE_NOT_FOUND
+POST {{host}}/api/v1/books/999999/borrow
+Content-Type: {{contentType}}
+
+{
+  "borrowerId": {{borrowerId}}
+}
+
+### 20. Health check
+GET {{host}}/actuator/health

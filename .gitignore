@@ -1,0 +1,19 @@
+target/
+
+# Keep the Maven wrapper (only-script type: no jar) so the project builds without a
+# local Maven install. The wrapper scripts and properties must stay in source control.
+!mvnw
+!mvnw.cmd
+!.mvn/wrapper/maven-wrapper.properties
+
+.idea/
+*.iml
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+
+.env
+*.log
+.DS_Store
