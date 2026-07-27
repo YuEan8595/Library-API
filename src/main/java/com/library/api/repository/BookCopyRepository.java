@@ -13,7 +13,7 @@ import java.util.Optional;
 
 public interface BookCopyRepository extends JpaRepository<BookCopy, Long> {
 
-    /** {@code join fetch} keeps the listing endpoint to a single query (no N+1). */
+    /** join fetch keeps the listing endpoint to a single query (no N+1). */
     @Query(value = "select c from BookCopy c join fetch c.edition e",
            countQuery = "select count(c) from BookCopy c")
     Page<BookCopy> findAllWithEdition(Pageable pageable);

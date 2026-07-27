@@ -15,7 +15,7 @@ import java.util.Objects;
  * A single physical copy on the shelf. This is the "Book" the API exposes:
  * it carries the unique id that borrow/return operate on.
  *
- * <p>Registering the same ISBN twice creates two {@code BookCopy} rows with
+ * <p>Registering the same ISBN twice creates two BookCopy rows with
  * different ids pointing at one shared {@link BookEdition}.
  */
 @Entity

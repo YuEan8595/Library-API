@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.function.Function;
 
 /**
- * A stable, hand-rolled pagination envelope. Serialising Spring's {@code Page}
+ * A stable, hand-rolled pagination envelope. Serialising Spring's Page
  * directly leaks internal structure and is unstable across Spring versions.
  */
 @Schema(description = "A page of results")

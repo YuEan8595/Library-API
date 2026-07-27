@@ -1,6 +1,6 @@
 # Assumptions
 
-Every decision made is listed here with the reasoning behind it and, 
+Every decision made is listed here with the reasoning behind it and,
 where relevant, what would change if the assumption is wrong.
 
 ---
@@ -155,13 +155,15 @@ to an internal port or secured.
 
 ## 5. Technical choices
 
-**5.1 Maven**
-Maven's declarative POM is faster to review.
+**5.1 Maven.**
+Satisfies "use a package manager". Maven's declarative POM is faster to review, which
+matters for an assessment.
 
-**5.2 PostgreSQL over an in-memory database, even for tests.**
+**5.2 PostgreSQL over an in-memory database.**
 Reasoning in [README § Choice of database](README.md#choice-of-database). The short version: the
-core invariant is a PostgreSQL partial unique index, so an in-memory substitute would validate a
-schema that is never deployed.
+core invariant is a PostgreSQL partial unique index, so an in-memory substitute like H2 would not
+support the very feature the correctness of the system rests on. End-to-end behaviour is instead
+verified by the Compose smoke test in CI, which runs against the same PostgreSQL image as production.
 
 **5.3 Flyway over `hibernate.ddl-auto`.**
 Schema changes are versioned, reviewable and repeatable. Hibernate is set to `validate` so a drift

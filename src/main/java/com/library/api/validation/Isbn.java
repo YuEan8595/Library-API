@@ -11,8 +11,7 @@ import java.lang.annotation.Target;
 
 /**
  * Marks a string as an ISBN-10 or ISBN-13, hyphens and spaces permitted.
- *
- * <p>A dedicated constraint rather than an inline {@code @Pattern} so that the rule lives
+ * A dedicated constraint rather than an inline Pattern so that the rule lives
  * in one place, reports as a normal field-level 400, and can be unit tested on its own.
  */
 @Documented

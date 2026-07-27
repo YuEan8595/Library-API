@@ -17,14 +17,14 @@ import java.util.stream.IntStream;
  * Traces every controller and service call: one line on entry (method + arguments),
  * one on exit (outcome + elapsed millis), and a distinct line if the call throws.
  *
- * <p>The point of doing this with an aspect rather than hand-written log statements is
+ * The point of doing this with an aspect rather than hand-written log statements is
  * that the tracing is uniform and lives in exactly one place - no method has to remember
  * to log, and the format can never drift between methods. Combined with the correlation
  * id that {@link CorrelationIdFilter} puts in the MDC, the log for a single request reads
  * as a contiguous, indented call tree, so an error at the bottom can be traced straight
  * back up to the HTTP call that caused it.
  *
- * <p>Logged at DEBUG so production stays quiet by default; flip {@code LOG_LEVEL_APP=DEBUG}
+ * Logged at DEBUG so production stays quiet by default; flip LOG_LEVEL_APP=DEBUG
  * to turn the trace on. Failures are logged at ERROR regardless, so they always surface.
  */
 @Aspect
@@ -71,9 +71,9 @@ public class LoggingAspect {
     /**
      * Runs a logging action, swallowing anything it throws.
      *
-     * <p>Tracing is diagnostics, not business logic: if rendering an argument or return value
+     * Tracing is diagnostics, not business logic: if rendering an argument or return value
      * ever fails, that must never turn a working request into an error. This is the backstop
-     * that guarantees the aspect can only ever <em>observe</em> a call, never break it.
+     * that guarantees the aspect can only ever observe a call, never break it.
      */
     private void safeLog(Runnable logAction) {
         try {
@@ -86,7 +86,7 @@ public class LoggingAspect {
     /**
      * Renders arguments, redacting any parameter whose name looks sensitive so passwords
      * and the like never reach the log. Parameter names survive because the build compiles
-     * with {@code -parameters} (Spring Boot's default), so this is reliable, not best-effort.
+     * with -parameters (Spring Boot's default), so this is reliable, not best-effort.
      */
     private String renderArgs(MethodSignature signature, Object[] args) {
         if (args.length == 0) {
@@ -122,11 +122,11 @@ public class LoggingAspect {
     /**
      * Renders any array type, or returns null if the value is not an array.
      *
-     * <p>{@code getClass().isArray()} is true for primitive arrays too (byte[], int[], ...),
-     * but those are <em>not</em> {@code Object[]}, so the old blanket cast to {@code Object[]}
-     * threw {@link ClassCastException} the moment a method returned, say, a {@code byte[]}
+     * getClass().isArray() is true for primitive arrays too (byte[], int[], ...),
+     * but those are not Object[], so the old blanket cast to Object[]
+     * threw {@link ClassCastException} the moment a method returned, say, a byte[]
      * (springdoc's /v3/api-docs does exactly that). Each primitive array type is handled
-     * explicitly; {@code byte[]} is summarised rather than dumped so a large binary payload
+     * explicitly; byte[] is summarised rather than dumped so a large binary payload
      * can't flood the log.
      */
     String renderArray(Object value) {

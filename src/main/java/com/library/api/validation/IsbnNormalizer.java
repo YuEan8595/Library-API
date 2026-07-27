@@ -2,10 +2,9 @@ package com.library.api.validation;
 
 /**
  * Normalises and checks user-supplied ISBNs.
- *
- * <p>Normalisation is what makes "978-0-13-235088-4", "978 0 13 235088 4" and
+ * Normalisation is what makes "978-0-13-235088-4", "978 0 13 235088 4" and
  * "9780132350884" resolve to one and the same edition, which matters because the ISBN
- * is the primary key of {@code book_edition}: without it the same book could be
+ * is the primary key of book_edition: without it the same book could be
  * registered twice under two spellings of its identifier.
  */
 public final class IsbnNormalizer {
@@ -20,8 +19,7 @@ public final class IsbnNormalizer {
 
     /**
      * True for a well-formed ISBN-10 or ISBN-13, check digit included.
-     *
-     * <p>A length-and-digits regex alone would happily accept an 11-digit string or a
+     * A length-and-digits regex alone would happily accept an 11-digit string or a
      * transposed digit pair; verifying the check digit rejects the overwhelming majority
      * of typos at the edge of the system rather than persisting them.
      */

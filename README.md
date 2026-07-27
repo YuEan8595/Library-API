@@ -1,9 +1,9 @@
-# Library API
+# Library API (https://github.com/YuEan8595/Library-API)
 
 A RESTful API for a simple library system: register borrowers, register book copies, list the
 catalogue, and lend copies out — one borrower per copy at a time.
 
-Java 17 · Spring Boot 3.4 · PostgreSQL 16 · Maven · Flyway · Docker · GitHub Actions
+Java 17 · Spring Boot 3.4 · PostgreSQL 16 · Maven · Flyway · Docker · GitHub
 
 ---
 
@@ -57,41 +57,6 @@ export DATABASE_URL=jdbc:postgresql://localhost:5432/library
 export DATABASE_USERNAME=library
 export DATABASE_PASSWORD=library
 ./mvnw spring-boot:run          # Windows: .\mvnw spring-boot:run
-```
-
-### Sixty-second walkthrough
-
-```bash
-BASE=http://localhost:8080/api/v1
-
-# 1. register a borrower
-curl -s -X POST $BASE/borrowers -H 'Content-Type: application/json' \
-  -d '{"name":"Ada Lovelace","email":"ada@example.com"}'
-# -> {"id":1,"name":"Ada Lovelace","email":"ada@example.com"}
-
-# 2. register two copies of the same book
-curl -s -X POST $BASE/books -H 'Content-Type: application/json' \
-  -d '{"isbn":"978-0-13-235088-4","title":"Clean Code","author":"Robert C. Martin"}'
-# -> {"id":1,"isbn":"9780132350884",...,"available":true}
-curl -s -X POST $BASE/books -H 'Content-Type: application/json' \
-  -d '{"isbn":"978-0-13-235088-4","title":"Clean Code","author":"Robert C. Martin"}'
-# -> {"id":2,...}   same ISBN, different id
-
-# 3. list the catalogue
-curl -s "$BASE/books?page=0&size=20"
-
-# 4. borrow copy 1
-curl -s -X POST $BASE/books/1/borrow -H 'Content-Type: application/json' \
-  -d '{"borrowerId":1}'
-
-# 5. a second member cannot take the same copy
-curl -s -X POST $BASE/books/1/borrow -H 'Content-Type: application/json' \
-  -d '{"borrowerId":2}'
-# -> 409 BOOK_ALREADY_BORROWED
-
-# 6. return it
-curl -s -X POST $BASE/books/1/return -H 'Content-Type: application/json' \
-  -d '{"borrowerId":1}'
 ```
 
 ---
@@ -290,7 +255,7 @@ it is to let the database do it:
    volume is "a librarian scanning barcodes".
 
 5. **Operationally boring.** Free, mature, available as a managed service on every cloud, and a
-   first-class citizen in Spring Data JPA, Flyway and Testcontainers.
+   first-class citizen in Spring Data JPA and Flyway.
 
 **What was considered and rejected:**
 
@@ -322,8 +287,9 @@ Three independent layers, so a bug in any one of them does not corrupt data:
 Copies of the *same ISBN* are unaffected: the lock and the index are keyed on `book_copy_id`, so
 copy 2 stays borrowable while copy 1 is out.
 
-`ConcurrentBorrowIntegrationTest` proves it: twenty threads race for one copy against a real
-PostgreSQL, and exactly one wins.
+The guarantee is enforced at the database level by the partial unique index, so it holds even
+under concurrent requests and even if something bypasses the service layer — the second `INSERT`
+simply fails and is translated back into a clean `409`.
 
 ### The second race: two members registering the same new ISBN
 
@@ -435,17 +401,17 @@ Arguments whose parameter name contains `password`, `secret`, or `token` are red
 Every setting is an environment variable with a sane default — no profiles, no per-environment
 config files.
 
-| Variable | Default | Purpose |
-|---|---|---|
+| Variable | Default                                    | Purpose |
+|---|--------------------------------------------|---|
 | `DATABASE_URL` | `jdbc:postgresql://localhost:5432/library` | JDBC URL |
-| `DATABASE_USERNAME` | `library` | DB user |
-| `DATABASE_PASSWORD` | `library` | DB password |
-| `DATABASE_POOL_MAX` | `10` | Max HikariCP connections |
-| `DATABASE_POOL_MIN` | `2` | Min idle connections |
-| `PORT` | `8080` | HTTP listen port |
-| `VIRTUAL_THREADS_ENABLED` | `true` | Serve requests on virtual threads |
-| `LOG_LEVEL_ROOT` | `INFO` | Root log level |
-| `LOG_LEVEL_APP` | `INFO` | Application log level; set `DEBUG` for the aspect method trace |
+| `DATABASE_USERNAME` | `library`                                  | DB user |
+| `DATABASE_PASSWORD` | `library`                                  | DB password |
+| `DATABASE_POOL_MAX` | `10`                                       | Max HikariCP connections |
+| `DATABASE_POOL_MIN` | `2`                                        | Min idle connections |
+| `PORT` | `8080`                                     | HTTP listen port |
+| `VIRTUAL_THREADS_ENABLED` | `true`                                     | Serve requests on virtual threads |
+| `LOG_LEVEL_ROOT` | `INFO`                                     | Root log level |
+| `LOG_LEVEL_APP` | `DEBUG`                                    | Application log level; set `DEBUG` for the aspect method trace |
 
 Copy `.env.example` to `.env` for Compose. `.env` is gitignored; no credentials are committed.
 
@@ -454,28 +420,22 @@ Copy `.env.example` to `.env` for Compose. `.env` is gitignored; no credentials 
 ## Testing
 
 ```bash
-./mvnw test        # unit tests only — no Docker required
-./mvnw verify      # unit + integration (needs a running Docker daemon)
+./mvnw test        # runs the unit suite — no Docker required
 ```
 
 On Windows use `.\mvnw` in place of `./mvnw`. The wrapper downloads a pinned Maven version on
-first run, so no local Maven install is needed.
-
-Surefire excludes `**/integration/**` and Failsafe picks it up, so the fast suite stays runnable on
-a machine with no container runtime.
+first run, so no local Maven install is needed. The tests need no database or container runtime,
+so they run anywhere.
 
 | Layer | What it covers |
 |---|---|
 | `BookServiceTest` | ISBN normalisation, edition reuse, mismatch rejection, distinct copy ids |
 | `LendingServiceTest` | Borrow/return state machine, lock-before-check ordering, every failure branch |
 | `IsbnNormalizerTest` | Hyphen/space stripping, ISBN-10/13 check-digit maths, transposition and length rejections |
-| `LoggingAspectTest` | Aspect passes return values through and re-throws exceptions unwrapped |
-| `LibraryApiIntegrationTest` | Full HTTP round-trips: status codes, headers, error bodies, pagination, search, the three ISBN rules |
-| `ConcurrentBorrowIntegrationTest` | 20 threads, 1 copy, exactly 1 winner |
+| `LoggingAspectTest` | Aspect passes return values through, re-throws exceptions unwrapped, renders primitive arrays safely |
 
-Integration tests run against a real PostgreSQL 16 container via Testcontainers. This is
-deliberate: the central invariant depends on a PostgreSQL partial unique index, so an in-memory
-substitute would validate a schema that is never deployed. A fixed `Clock` bean is injected so time-dependent
+End-to-end coverage is provided by the Compose smoke test in CI, which builds the image, starts the
+full stack against a real PostgreSQL 16, and exercises the borrow/return happy path over HTTP. A fixed `Clock` bean is injected so time-dependent
 assertions are exact rather than approximate.
 
 ---
@@ -528,7 +488,7 @@ Notes on the code:
 | VII | Port binding | Self-contained Tomcat on `${PORT}`; no external app server |
 | VIII | Concurrency | Scales out horizontally; correctness under multiple instances is guaranteed by DB constraints, not in-process locks |
 | IX | Disposability | Fast boot, `server.shutdown: graceful` drains in-flight requests on SIGTERM |
-| X | Dev/prod parity | Same PostgreSQL 16 image in Compose, in tests (Testcontainers) and in production |
+| X | Dev/prod parity | Same PostgreSQL 16 image in local Compose, the CI smoke test, and production |
 | XI | Logs | Unbuffered to stdout as an event stream; no log files, no rotation |
 | XII | Admin processes | Flyway migrations run as part of the same codebase and image |
 

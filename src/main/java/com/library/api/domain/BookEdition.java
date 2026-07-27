@@ -10,7 +10,7 @@ import java.util.Objects;
 /**
  * The bibliographic identity of a book, keyed by ISBN.
  *
- * <p>Making the ISBN the primary key is what structurally enforces the rule
+ * Making the ISBN the primary key is what structurally enforces the rule
  * "two books with the same ISBN must have the same title and author": the
  * title/author pair is stored exactly once per ISBN, so it is impossible for
  * two copies to disagree. Physical copies live in {@link BookCopy}.

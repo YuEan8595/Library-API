@@ -23,17 +23,14 @@ import java.util.List;
 
 /**
  * Borrowing and returning.
- *
- * <p>Requirement: no more than one borrower may hold a given book id at a time.
+ * Requirement: no more than one borrower may hold a given book id at a time.
  * That is defended at three levels:
- * <ol>
- *   <li>a {@code SELECT ... FOR UPDATE} on the copy row, which serialises concurrent
- *       borrow attempts for that copy;</li>
- *   <li>an explicit check for an existing active loan inside the same transaction;</li>
- *   <li>a partial unique index in PostgreSQL on {@code (book_copy_id) WHERE returned_at IS NULL},
- *       which makes a duplicate active loan impossible even if the application layer is
- *       bypassed or a second instance is deployed.</li>
- * </ol>
+ *   a SELECT ... FOR UPDATE on the copy row, which serialises concurrent
+ *   borrow attempts for that copy;
+ *   an explicit check for an existing active loan inside the same transaction;
+ *   a partial unique index in PostgreSQL on (book_copy_id) WHERE returned_at IS NULL,
+ *   which makes a duplicate active loan impossible even if the application layer is
+ *   bypassed or a second instance is deployed.
  */
 @Service
 public class LendingService {

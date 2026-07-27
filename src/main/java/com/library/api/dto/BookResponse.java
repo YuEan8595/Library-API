@@ -4,7 +4,7 @@ import com.library.api.domain.BookCopy;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * A single copy as seen by API consumers. {@code id} is the copy id: it is what
+ * A single copy as seen by API consumers. id is the copy id: it is what
  * borrow and return operate on, and it differs between two copies of the same ISBN.
  */
 @Schema(description = "A physical book copy in the library")

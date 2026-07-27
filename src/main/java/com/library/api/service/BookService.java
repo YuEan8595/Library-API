@@ -37,10 +37,9 @@ public class BookService {
 
     /**
      * Registers one physical copy.
-     *
-     * <p>If the ISBN is new, its title/author are recorded. If the ISBN already exists,
+     * If the ISBN is new, its title/author are recorded. If the ISBN already exists,
      * the submitted title/author must match it, otherwise the request is rejected with
-     * 409. Either way a brand new copy row - and therefore a brand new book id - is
+     * 409. Either way a brand-new copy row and therefore a brand-new book id - is
      * created, which is what makes multiple copies of the same ISBN possible.
      */
     @Transactional
@@ -58,8 +57,7 @@ public class BookService {
 
     /**
      * Returns the edition for this ISBN, creating it if this is the first copy.
-     *
-     * <p>Insert-if-absent first, then read back and compare. Whichever request wins a race
+     * Insert-if-absent first, then read back and compare. Whichever request wins a race
      * to create a new ISBN, both end up reading the same winning row and both validate
      * their title/author against it, so a concurrent conflicting registration is rejected
      * with the same 409 a sequential one would get.
@@ -79,8 +77,7 @@ public class BookService {
 
     /**
      * Lists every copy in the library, newest page first by id.
-     *
-     * <p>Availability is resolved with one extra query for the whole page rather than
+     * Availability is resolved with one extra query for the whole page rather than
      * one per row, which keeps the endpoint free of the N+1 problem.
      */
     @Transactional(readOnly = true)

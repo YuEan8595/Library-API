@@ -12,15 +12,15 @@ public interface BookEditionRepository extends JpaRepository<BookEdition, String
      * Inserts the edition only if that ISBN is not on file yet, and reports how many rows
      * were written.
      *
-     * <p>The obvious alternative - "look it up, and save it if absent" - has a race: two
+     * The obvious alternative - "look it up, and save it if absent" - has a race: two
      * requests registering the same new ISBN can both see nothing and both insert, and the
      * loser gets a constraint violation. Catching that violation is not a fix either,
      * because a failed flush leaves the Hibernate session unusable and the transaction
      * marked rollback-only, so the recovery read would fail too.
      *
-     * <p>{@code ON CONFLICT DO NOTHING} pushes the check and the insert into one atomic
+     * ON CONFLICT DO NOTHING pushes the check and the insert into one atomic
      * statement, so there is no window to lose and no exception to recover from. The bare
-     * form (no conflict target) is used deliberately: {@code isbn} is the only unique
+     * form (no conflict target) is used deliberately: isbn is the only unique
      * constraint on the table, so it behaves identically to naming the target explicitly.
      */
     @Modifying(flushAutomatically = true, clearAutomatically = true)

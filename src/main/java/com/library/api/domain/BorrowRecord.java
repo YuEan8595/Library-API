@@ -14,12 +14,11 @@ import java.time.Instant;
 import java.util.Objects;
 
 /**
- * One borrow event. A record with {@code returnedAt == null} is an *active* loan.
- *
- * <p>Keeping returned loans instead of deleting them gives the library a full
+ * One borrow event. A record with {returnedAt == null} is an *active* loan.
+ * Keeping returned loans instead of deleting them gives the library a full
  * lending history for free. The "only one borrower per copy at a time" rule is
- * enforced by a partial unique index on {@code (book_copy_id) WHERE returned_at IS NULL}
- * (see {@code V1__init.sql}), backed by a pessimistic row lock in the service layer.
+ * enforced by a partial unique index on (book_copy_id) WHERE returned_at IS NULL
+ * (see V1__init.sql), backed by a pessimistic row lock in the service layer.
  */
 @Entity
 @Table(name = "borrow_record")

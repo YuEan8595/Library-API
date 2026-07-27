@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Translates every exception into an RFC 7807 {@code application/problem+json} body,
+ * Translates every exception into an RFC 7807 application/problem+json body,
  * so clients get one consistent error shape instead of Spring's default page.
  */
 @RestControllerAdvice
@@ -72,9 +72,9 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * A {@code sort=} (or other Pageable) param naming a field the entity does not have.
+     * A sort= (or other Pageable) param naming a field the entity does not have.
      * This is bad client input, so it is a 400, not the 500 the catch-all would otherwise give.
-     * Swagger UI's default {@code sort} placeholder is the usual trigger.
+     * Swagger UI's default sort placeholder is the usual trigger.
      */
     @ExceptionHandler(PropertyReferenceException.class)
     public ProblemDetail handleUnknownProperty(PropertyReferenceException ex, HttpServletRequest request) {

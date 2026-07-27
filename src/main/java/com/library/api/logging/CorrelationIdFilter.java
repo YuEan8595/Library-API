@@ -17,15 +17,15 @@ import java.util.UUID;
 /**
  * Gives every request a correlation id and exposes it two ways: in the SLF4J {@link MDC}
  * (so the log pattern can print it on every line the request produces) and in an
- * {@code X-Correlation-Id} response header (so a caller who reports a failure can quote the
+ * X-Correlation-Id response header (so a caller who reports a failure can quote the
  * exact id to grep for).
  *
- * <p>This is the piece that makes {@link LoggingAspect}'s output traceable: without a shared
+ * This is the piece that makes {@link LoggingAspect}'s output traceable: without a shared
  * id, concurrent requests interleave their trace lines and you cannot tell which "threw" line
- * belongs to which "-->" line. If the caller already sent an {@code X-Correlation-Id}, it is
+ * belongs to which "-->" line. If the caller already sent an X-Correlation-Id, it is
  * honoured so a trace can span several services.
  *
- * <p>Ordered {@code HIGHEST_PRECEDENCE} so the id is in place before anything else logs.
+ * Ordered HIGHEST_PRECEDENCE so the id is in place before anything else logs.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
