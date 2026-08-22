@@ -92,16 +92,19 @@ jobs:
       - name: Exercise the happy path
         run: |
           set -euo pipefail
+          TOKEN=$(curl -fsS -u library-staff:staff-secret -X POST http://localhost:8080/oauth2/token \
+            -d grant_type=client_credentials -d scope=library.api | jq -r '.access_token')
+          AUTH="Authorization: Bearer ${TOKEN}"
           BORROWER=$(curl -fsS -X POST http://localhost:8080/api/v1/borrowers \
-            -H 'Content-Type: application/json' \
+            -H "$AUTH" -H 'Content-Type: application/json' \
             -d '{"name":"CI Bot","email":"ci@example.com"}' | jq -r '.id')
           BOOK=$(curl -fsS -X POST http://localhost:8080/api/v1/books \
-            -H 'Content-Type: application/json' \
+            -H "$AUTH" -H 'Content-Type: application/json' \
             -d '{"isbn":"9780132350884","title":"Clean Code","author":"Robert C. Martin"}' | jq -r '.id')
           curl -fsS -X POST "http://localhost:8080/api/v1/books/${BOOK}/borrow" \
-            -H 'Content-Type: application/json' -d "{\"borrowerId\":${BORROWER}}"
+            -H "$AUTH" -H 'Content-Type: application/json' -d "{\"borrowerId\":${BORROWER}}"
           curl -fsS -X POST "http://localhost:8080/api/v1/books/${BOOK}/return" \
-            -H 'Content-Type: application/json' -d "{\"borrowerId\":${BORROWER}}"
+            -H "$AUTH" -H 'Content-Type: application/json' -d "{\"borrowerId\":${BORROWER}}"
 
       - name: Tear down
         if: always()

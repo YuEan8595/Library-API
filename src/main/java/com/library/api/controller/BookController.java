@@ -5,6 +5,7 @@ import com.library.api.dto.BorrowRequest;
 import com.library.api.dto.CreateBookRequest;
 import com.library.api.dto.LoanResponse;
 import com.library.api.dto.PageResponse;
+import com.library.api.security.AuthorizationHelper;
 import com.library.api.service.BookService;
 import com.library.api.service.LendingService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,6 +20,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -35,10 +38,13 @@ public class BookController {
 
     private final BookService bookService;
     private final LendingService lendingService;
+    private final AuthorizationHelper authorizationHelper;
 
-    public BookController(BookService bookService, LendingService lendingService) {
+    public BookController(BookService bookService, LendingService lendingService,
+                          AuthorizationHelper authorizationHelper) {
         this.bookService = bookService;
         this.lendingService = lendingService;
+        this.authorizationHelper = authorizationHelper;
     }
 
     @PostMapping
@@ -82,8 +88,10 @@ public class BookController {
             @ApiResponse(responseCode = "404", description = "Book or borrower not found", content = @Content),
             @ApiResponse(responseCode = "409", description = "Copy is already borrowed", content = @Content)
     })
-    public LoanResponse borrow(@PathVariable Long bookId, @Valid @RequestBody BorrowRequest request) {
-        return lendingService.borrow(bookId, request.borrowerId());
+    public LoanResponse borrow(@PathVariable Long bookId, @Valid @RequestBody BorrowRequest request,
+                               @AuthenticationPrincipal Jwt jwt) {
+        Long borrowerId = authorizationHelper.resolveBorrowerId(jwt, request.borrowerId());
+        return lendingService.borrow(bookId, borrowerId);
     }
 
     @PostMapping("/{bookId}/return")
@@ -95,7 +103,9 @@ public class BookController {
             @ApiResponse(responseCode = "404", description = "Book or borrower not found", content = @Content),
             @ApiResponse(responseCode = "409", description = "Copy is not currently borrowed", content = @Content)
     })
-    public LoanResponse returnBook(@PathVariable Long bookId, @Valid @RequestBody BorrowRequest request) {
-        return lendingService.returnBook(bookId, request.borrowerId());
+    public LoanResponse returnBook(@PathVariable Long bookId, @Valid @RequestBody BorrowRequest request,
+                                   @AuthenticationPrincipal Jwt jwt) {
+        Long borrowerId = authorizationHelper.resolveBorrowerId(jwt, request.borrowerId());
+        return lendingService.returnBook(bookId, borrowerId);
     }
 }

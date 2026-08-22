@@ -15,12 +15,36 @@
 @contentType = application/json
 
 ### ---------------------------------------------------------------------
+### 0. Get a LIBRARIAN access token (client_credentials) — captures {{token}}
+### Every request below sends it as "Authorization: Bearer {{token}}".
+###
+### The MEMBER flow (authorization_code + PKCE, login as ada@example.com /
+### member-password) needs a browser redirect, so it isn't practical to script
+### here — try it from Swagger UI's Authorize button, or see the README's
+### "Authentication & authorization" section for the curl/Postman walkthrough.
+### ---------------------------------------------------------------------
+# @name getToken
+POST {{host}}/oauth2/token
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic bGlicmFyeS1zdGFmZjpzdGFmZi1zZWNyZXQ=
+
+grant_type=client_credentials&scope=library.api
+
+> {%
+    client.global.set("token", response.body.access_token);
+    client.test("token issued", () => {
+        client.assert(response.status === 200, "expected 200, got " + response.status);
+    });
+%}
+
+### ---------------------------------------------------------------------
 ### 1. Register a borrower
 ### Captures the new id into {{borrowerId}} for later requests.
 ### ---------------------------------------------------------------------
 # @name registerBorrower
 POST {{host}}/api/v1/borrowers
 Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
 
 {
   "name": "Ada Lovelace",
@@ -40,6 +64,7 @@ Content-Type: {{contentType}}
 # @name registerBorrower2
 POST {{host}}/api/v1/borrowers
 Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
 
 {
   "name": "Grace Hopper",
@@ -54,6 +79,7 @@ Content-Type: {{contentType}}
 # @name registerBook1
 POST {{host}}/api/v1/books
 Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
 
 {
   "isbn": "9780132350884",
@@ -76,6 +102,7 @@ Content-Type: {{contentType}}
 # @name registerBook2
 POST {{host}}/api/v1/books
 Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
 
 {
   "isbn": "9780132350884",
@@ -95,16 +122,19 @@ Content-Type: {{contentType}}
 ### 5. List the whole catalogue
 ### ---------------------------------------------------------------------
 GET {{host}}/api/v1/books
+Authorization: Bearer {{token}}
 
 ### ---------------------------------------------------------------------
 ### 6. List with search + pagination
 ### ---------------------------------------------------------------------
 GET {{host}}/api/v1/books?search=clean&page=0&size=10
+Authorization: Bearer {{token}}
 
 ### ---------------------------------------------------------------------
 ### 7. Fetch a single copy
 ### ---------------------------------------------------------------------
 GET {{host}}/api/v1/books/{{bookId1}}
+Authorization: Bearer {{token}}
 
 ### ---------------------------------------------------------------------
 ### 8. Borrow copy 1 on behalf of Ada — expect 200
@@ -112,6 +142,7 @@ GET {{host}}/api/v1/books/{{bookId1}}
 # @name borrow
 POST {{host}}/api/v1/books/{{bookId1}}/borrow
 Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
 
 {
   "borrowerId": {{borrowerId}}
@@ -129,6 +160,7 @@ Content-Type: {{contentType}}
 ### ---------------------------------------------------------------------
 POST {{host}}/api/v1/books/{{bookId1}}/borrow
 Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
 
 {
   "borrowerId": {{borrowerId2}}
@@ -147,6 +179,7 @@ Content-Type: {{contentType}}
 ### ---------------------------------------------------------------------
 POST {{host}}/api/v1/books/{{bookId2}}/borrow
 Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
 
 {
   "borrowerId": {{borrowerId2}}
@@ -159,12 +192,14 @@ Content-Type: {{contentType}}
 ### 11. List Ada's active loans
 ### ---------------------------------------------------------------------
 GET {{host}}/api/v1/borrowers/{{borrowerId}}/loans
+Authorization: Bearer {{token}}
 
 ### ---------------------------------------------------------------------
 ### 12. Grace tries to return Ada's book — expect 403 BORROWER_MISMATCH
 ### ---------------------------------------------------------------------
 POST {{host}}/api/v1/books/{{bookId1}}/return
 Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
 
 {
   "borrowerId": {{borrowerId2}}
@@ -182,6 +217,7 @@ Content-Type: {{contentType}}
 ### ---------------------------------------------------------------------
 POST {{host}}/api/v1/books/{{bookId1}}/return
 Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
 
 {
   "borrowerId": {{borrowerId}}
@@ -199,6 +235,7 @@ Content-Type: {{contentType}}
 ### ---------------------------------------------------------------------
 POST {{host}}/api/v1/books/{{bookId1}}/return
 Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
 
 {
   "borrowerId": {{borrowerId}}
@@ -215,6 +252,7 @@ Content-Type: {{contentType}}
 ### 15. Duplicate email — expect 409 EMAIL_ALREADY_REGISTERED
 POST {{host}}/api/v1/borrowers
 Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
 
 {
   "name": "Ada again",
@@ -224,6 +262,7 @@ Content-Type: {{contentType}}
 ### 16. Invalid email + blank name — expect 400 with a per-field breakdown
 POST {{host}}/api/v1/borrowers
 Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
 
 {
   "name": "",
@@ -233,6 +272,7 @@ Content-Type: {{contentType}}
 ### 17. Bad ISBN check digit — expect 400 (9780132350885 fails the checksum)
 POST {{host}}/api/v1/books
 Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
 
 {
   "isbn": "9780132350885",
@@ -243,6 +283,7 @@ Content-Type: {{contentType}}
 ### 18. Same ISBN, conflicting title — expect 409 ISBN_MISMATCH
 POST {{host}}/api/v1/books
 Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
 
 {
   "isbn": "9780132350884",
@@ -253,10 +294,20 @@ Content-Type: {{contentType}}
 ### 19. Borrow a non-existent book — expect 404 RESOURCE_NOT_FOUND
 POST {{host}}/api/v1/books/999999/borrow
 Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
 
 {
   "borrowerId": {{borrowerId}}
 }
 
-### 20. Health check
+### =====================================================================
+### Authorization edge cases
+### =====================================================================
+
+### 20. No token at all — expect 401 UNAUTHENTICATED
+GET {{host}}/api/v1/books
+
+### ---------------------------------------------------------------------
+### 21. Health check (public, no token needed)
+### ---------------------------------------------------------------------
 GET {{host}}/actuator/health

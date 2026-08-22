@@ -32,6 +32,8 @@ services:
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-library}
       PORT: 8080
       LOG_LEVEL_APP: ${LOG_LEVEL_APP:-INFO}
+      OAUTH2_ISSUER_URI: ${OAUTH2_ISSUER_URI:-http://localhost:8080}
+      LIBRARY_STAFF_CLIENT_SECRET: ${LIBRARY_STAFF_CLIENT_SECRET:-staff-secret}
     ports:
       - "${API_PORT:-8080}:8080"
     restart: unless-stopped

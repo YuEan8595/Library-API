@@ -10,17 +10,18 @@ Java 17 · Spring Boot 3.4 · PostgreSQL 16 · Maven · Flyway · Docker · GitH
 ## Table of contents
 
 1. [Quick start](#quick-start)
-2. [API reference](#api-reference)
-3. [Data model](#data-model)
-4. [Choice of database](#choice-of-database)
-5. [How "one borrower per copy" is guaranteed](#how-one-borrower-per-copy-is-guaranteed)
-6. [Error format](#error-format)
-7. [Request tracing](#request-tracing)
-8. [Configuration](#configuration)
-9. [Testing](#testing)
-10. [Project layout](#project-layout)
-11. [12-Factor conformance](#12-factor-conformance)
-12. [Assumptions](#assumptions)
+2. [Authentication & authorization](#authentication--authorization)
+3. [API reference](#api-reference)
+4. [Data model](#data-model)
+5. [Choice of database](#choice-of-database)
+6. [How "one borrower per copy" is guaranteed](#how-one-borrower-per-copy-is-guaranteed)
+7. [Error format](#error-format)
+8. [Request tracing](#request-tracing)
+9. [Configuration](#configuration)
+10. [Testing](#testing)
+11. [Project layout](#project-layout)
+12. [12-Factor conformance](#12-factor-conformance)
+13. [Assumptions](#assumptions)
 
 ---
 
@@ -43,6 +44,9 @@ That builds the image, starts PostgreSQL, runs the Flyway migrations, and expose
 
 Tear down with `docker compose down -v`.
 
+Every non-GET-health request needs a bearer token — see the next section for how to get one
+in ten seconds with `curl`.
+
 
 ### Option B — run locally against PostgreSQL
 
@@ -61,10 +65,68 @@ export DATABASE_PASSWORD=library
 
 ---
 
+## Authentication & authorization
+
+The API is an OAuth2 **resource server**; every `/api/v1/**` request needs a `Bearer` access
+token. This same app is also its own local **authorization server** (`/oauth2/*`), so there is
+nothing external to stand up — the trade-off is that it is dev/demo-shaped, not
+production-shaped; see [Assumptions §4.1](ASSUMPTIONS.md) for exactly what that means and what
+would change for a real deployment.
+
+Two roles:
+
+| Role | Who | Can do |
+|---|---|---|
+| `LIBRARIAN` | Staff / a trusted service | Register borrowers and books, list all borrowers, borrow/return **on behalf of any borrower** by passing `borrowerId` in the request body |
+| `MEMBER` | A borrower, logged in as themselves | Borrow/return **only as themselves** (their `borrowerId` comes from the token — any value in the request body is ignored), view only their own borrower record and loans |
+
+| Endpoint | Required role |
+|---|---|
+| `POST /api/v1/borrowers` | `LIBRARIAN` |
+| `GET /api/v1/borrowers` | `LIBRARIAN` |
+| `GET /api/v1/borrowers/{id}`, `GET /api/v1/borrowers/{id}/loans` | `LIBRARIAN`, or `MEMBER` reading their own id |
+| `POST /api/v1/books` | `LIBRARIAN` |
+| `GET /api/v1/books`, `GET /api/v1/books/{id}` | any authenticated user |
+| `POST /api/v1/books/{id}/borrow`, `POST /api/v1/books/{id}/return` | any authenticated user (the effective `borrowerId` depends on role, per the table above) |
+
+### Getting a LIBRARIAN token (`client_credentials`)
+
+No browser needed — one request:
+
+```bash
+curl -u library-staff:staff-secret http://localhost:8080/oauth2/token \
+  -d grant_type=client_credentials -d scope=library.api
+```
+
+Use the returned `access_token` as `Authorization: Bearer <token>`. `api.http` request 0 does
+this automatically and stores the result in `{{token}}` for every request after it.
+
+### Getting a MEMBER token (`authorization_code` + PKCE)
+
+A member logs in as themselves through the authorization server's own login form, so this needs
+a redirect step a plain `curl` script can't do. Before trying it, register a borrower with email
+`ada@example.com` (or `grace@example.com`) as a `LIBRARIAN` — the dev logins
+`ada@example.com` / `grace@example.com`, password `member-password`, only produce a usable token
+once a matching borrower exists (see [Assumptions §4.1](ASSUMPTIONS.md)).
+
+- **Postman**: create an OAuth2 config with grant type "Authorization Code (with PKCE)", auth
+  URL `http://localhost:8080/oauth2/authorize`, token URL `http://localhost:8080/oauth2/token`,
+  client id `library-web`, no client secret, scope `library.api`, callback URL
+  `https://oauth.pstmn.io/v1/callback` (already registered as a valid redirect URI).
+- **By hand**: visit
+  `/oauth2/authorize?response_type=code&client_id=library-web&scope=library.api&redirect_uri=https://oauth.pstmn.io/v1/callback&code_challenge=<S256 challenge>&code_challenge_method=S256`,
+  log in, and exchange the `code` query param it redirects to at `/oauth2/token`.
+
+Decode either token at [jwt.io](https://jwt.io) to see its `roles` claim, and for a member,
+`borrower_id`.
+
+---
+
 ## API reference
 
 All endpoints live under `/api/v1`, consume and produce `application/json`, and return errors as
-`application/problem+json`. There is no authentication — see [Assumptions](#assumptions).
+`application/problem+json`. Every request needs a bearer token — see
+[Authentication & authorization](#authentication--authorization) above.
 
 ### `POST /api/v1/borrowers` — register a borrower
 
@@ -150,6 +212,10 @@ Request:
 ```json
 { "borrowerId": 1 }
 ```
+
+`borrowerId` is required for a `LIBRARIAN` (who borrows on someone else's behalf) and ignored
+for a `MEMBER` (who always borrows as themselves — see
+[Authentication & authorization](#authentication--authorization)).
 
 `200 OK`:
 
@@ -348,9 +414,13 @@ Branch on `errorCode`, not on prose.
 
 | `errorCode` | Status | Meaning |
 |---|---|---|
-| `VALIDATION_FAILED` | 400 | A field failed Bean Validation |
+| `UNAUTHENTICATED` | 401 | No token, or the token failed verification |
+| `VALIDATION_FAILED` | 400 | A field failed Bean Validation, or a `LIBRARIAN` omitted `borrowerId` |
 | `MALFORMED_REQUEST` | 400 | Body is absent or not valid JSON |
 | `INVALID_PARAMETER` | 400 | A path/query parameter has the wrong type |
+| `ACCESS_DENIED` | 403 | Token valid, but its role can't call this route (e.g. a `MEMBER` on a `LIBRARIAN`-only endpoint) |
+| `BORROWER_ACCESS_DENIED` | 403 | A `MEMBER` tried to read another borrower's record or loans |
+| `MEMBER_NOT_LINKED` | 403 | A `MEMBER` token whose email doesn't match any registered borrower |
 | `BORROWER_MISMATCH` | 403 | A different member holds this loan |
 | `INVALID_SORT` | 400 | `sort=` names a field the entity doesn't have |
 | `RESOURCE_NOT_FOUND` | 404 | Unknown borrower or book id |
@@ -412,6 +482,8 @@ config files.
 | `VIRTUAL_THREADS_ENABLED` | `true`                                     | Serve requests on virtual threads |
 | `LOG_LEVEL_ROOT` | `INFO`                                     | Root log level |
 | `LOG_LEVEL_APP` | `DEBUG`                                    | Application log level; set `DEBUG` for the aspect method trace |
+| `OAUTH2_ISSUER_URI` | `http://localhost:8080`                    | The `iss` claim value the local authorization server stamps on tokens (not used for discovery — see [Assumptions §4.1](ASSUMPTIONS.md)) |
+| `LIBRARY_STAFF_CLIENT_SECRET` | `staff-secret`                             | Client secret for the `library-staff` `client_credentials` client. **Change this in any shared environment.** |
 
 Copy `.env.example` to `.env` for Compose. `.env` is gitignored; no credentials are committed.
 
@@ -433,10 +505,13 @@ so they run anywhere.
 | `LendingServiceTest` | Borrow/return state machine, lock-before-check ordering, every failure branch |
 | `IsbnNormalizerTest` | Hyphen/space stripping, ISBN-10/13 check-digit maths, transposition and length rejections |
 | `LoggingAspectTest` | Aspect passes return values through, re-throws exceptions unwrapped, renders primitive arrays safely |
+| `AuthorizationHelperTest` | Role → effective borrowerId resolution, ownership checks, both success and rejection paths |
+| `BookControllerSecurityTest`, `BorrowerControllerSecurityTest` | Real security config + real role/ownership logic, fabricated JWTs (`spring-security-test`) — anonymous rejection, role enforcement, and that a MEMBER's token borrowerId wins over whatever is in the request body |
 
 End-to-end coverage is provided by the Compose smoke test in CI, which builds the image, starts the
-full stack against a real PostgreSQL 16, and exercises the borrow/return happy path over HTTP. A fixed `Clock` bean is injected so time-dependent
-assertions are exact rather than approximate.
+full stack against a real PostgreSQL 16, gets a real `client_credentials` token from the app's own
+authorization server, and exercises the borrow/return happy path over HTTP with it. A fixed `Clock`
+bean is injected so time-dependent assertions are exact rather than approximate.
 
 ---
 
@@ -448,6 +523,7 @@ src/main/java/com/library/api/
 ├── controller/   HTTP only — routing, status codes, no business logic
 ├── domain/       JPA entities; invariants live on the entities
 ├── logging/      Correlation-id filter + AOP method-trace aspect
+├── security/     Resource server + local authorization server config, role/ownership checks
 ├── validation/   ISBN normalisation and the @Isbn constraint
 ├── dto/          Request/response records, isolated from the entities
 ├── exception/    Typed exceptions + one RestControllerAdvice

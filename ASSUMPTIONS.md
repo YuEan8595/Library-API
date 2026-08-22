@@ -125,19 +125,43 @@ Clients branch on `errorCode`; `detail` is for humans and may be reworded.
 
 ## 4. Security and operations
 
-**4.1 There is no authentication or authorisation.**
-The task describes an API with no notion of identity beyond a borrower id passed as data, and adding
-a half-designed auth scheme would obscure the actual requirements. **This API is not
-internet-facing as written.** In production it would sit behind an API gateway or add Spring
-Security with OAuth2/JWT, at which point the borrower id would come from the token rather than the
-request body for actions a member performs on their own behalf.
+**4.1 Authentication and authorisation are OAuth2/JWT, self-hosted, and dev-shaped.**
+The API is an OAuth2 resource server (`com.library.api.security.SecurityConfig`) that trusts JWTs
+issued by a local authorization server running inside the same app
+(`com.library.api.security.AuthorizationServerConfig`), so there is nothing external to stand up.
+Two roles, `LIBRARIAN` and `MEMBER`, are carried in a `roles` claim; a `MEMBER`'s own borrower id
+comes from a `borrower_id` claim on their token rather than the request body, closing the gap
+where any caller could otherwise act as any borrower. Full detail: [README §
+Authentication & authorization](README.md#authentication--authorization).
+
+This is deliberately **dev/demo-shaped, not production-shaped**, in ways that are safe to know
+about but would need to change before this sat behind a real login flow:
+
+- **Both client and user accounts are in-memory** (`AuthorizationServerConfig`'s
+  `RegisteredClientRepository`, `SecurityConfig`'s `UserDetailsService`). Restarting the app forgets
+  every registered OAuth2 client and demo login. Production would back these with a database or
+  swap the whole local authorization server for an external IdP (Keycloak, Auth0, Okta, ...).
+- **The JWT signing key is a fresh in-memory RSA keypair generated on every boot.** Restarting the
+  app invalidates every token issued before the restart, and running more than one instance would
+  not work — each would mint and verify against its own key, so instance B would reject a token
+  instance A issued. A real deployment needs a shared, persisted key (or, again, an external IdP).
+- **A member logs in with a plaintext dev password** (`member-password` for the two demo
+  accounts) against an in-memory `UserDetailsService`; production needs a real credential store.
+- **A member account only works once a borrower with the same email already exists.** The token
+  customizer looks the logged-in email up in `BorrowerRepository` at token-issue time; if nothing
+  matches, the token carries no `borrower_id` claim and every borrow/return/self-lookup call fails
+  with `403 MEMBER_NOT_LINKED`. This mirrors "you need a library card first," which is arguably
+  correct behaviour rather than a shortcut, but it does mean member login isn't fully self-service.
 
 **4.2 The API user is trusted staff or a trusted service.**
 There is no rate limiting, no request quota and no audit trail beyond application logs.
 
 **4.3 Deployment is expected to be multi-instance.**
 Hence the reliance on database constraints rather than in-process locking. A `synchronized` block
-or a JVM-local lock would silently stop working the moment a second replica is deployed.
+or a JVM-local lock would silently stop working the moment a second replica is deployed. The one
+deliberate exception is the local authorization server's per-instance JWT signing key (§4.1): that
+genuinely does not work multi-instance as shipped, which is exactly why §4.1 calls it out as the
+piece to replace first — with a shared persisted key or an external IdP — before scaling out.
 
 **4.4 Default credentials in `docker-compose.yml` are for local development only.**
 They exist so `docker compose up` works with no setup. Real deployments supply

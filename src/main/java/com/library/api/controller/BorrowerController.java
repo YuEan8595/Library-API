@@ -4,6 +4,7 @@ import com.library.api.dto.BorrowerResponse;
 import com.library.api.dto.CreateBorrowerRequest;
 import com.library.api.dto.LoanResponse;
 import com.library.api.dto.PageResponse;
+import com.library.api.security.AuthorizationHelper;
 import com.library.api.service.BorrowerService;
 import com.library.api.service.LendingService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,6 +16,8 @@ import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -32,10 +35,13 @@ public class BorrowerController {
 
     private final BorrowerService borrowerService;
     private final LendingService lendingService;
+    private final AuthorizationHelper authorizationHelper;
 
-    public BorrowerController(BorrowerService borrowerService, LendingService lendingService) {
+    public BorrowerController(BorrowerService borrowerService, LendingService lendingService,
+                              AuthorizationHelper authorizationHelper) {
         this.borrowerService = borrowerService;
         this.lendingService = lendingService;
+        this.authorizationHelper = authorizationHelper;
     }
 
     @PostMapping
@@ -55,7 +61,8 @@ public class BorrowerController {
 
     @GetMapping("/{borrowerId}")
     @Operation(summary = "Fetch a single borrower")
-    public BorrowerResponse getOne(@PathVariable Long borrowerId) {
+    public BorrowerResponse getOne(@PathVariable Long borrowerId, @AuthenticationPrincipal Jwt jwt) {
+        authorizationHelper.requireOwnerOrLibrarian(jwt, borrowerId);
         return borrowerService.findById(borrowerId);
     }
 
@@ -67,7 +74,8 @@ public class BorrowerController {
 
     @GetMapping("/{borrowerId}/loans")
     @Operation(summary = "List the books this borrower currently has out")
-    public List<LoanResponse> activeLoans(@PathVariable Long borrowerId) {
+    public List<LoanResponse> activeLoans(@PathVariable Long borrowerId, @AuthenticationPrincipal Jwt jwt) {
+        authorizationHelper.requireOwnerOrLibrarian(jwt, borrowerId);
         return lendingService.activeLoansOf(borrowerId);
     }
 }
